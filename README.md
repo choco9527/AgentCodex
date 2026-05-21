@@ -28,7 +28,7 @@ npm install -g @openai/codex
 
 ### 2. 运行项目
 ```bash
-cd codex-bridge
+cd AgentCodex
 python3 codex_client.py
 ```
 
