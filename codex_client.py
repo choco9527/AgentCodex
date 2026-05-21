@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import platform
 import subprocess
 import sys
 import threading
@@ -378,6 +379,54 @@ def read_log_meta(path: Path) -> Dict[str, Any]:
     return {}
 
 
+def get_codex_home(codex_binary: str = "") -> Path:
+    """Dynamically locate the Codex home directory across platforms."""
+    if env_path := os.getenv("CODEX_HOME"):
+        return Path(env_path).expanduser().resolve()
+
+    home = Path.home()
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        return home / "Library" / "Application Support" / "Codex"
+    elif system == "Windows":
+        appdata = os.getenv("APPDATA") or (home / "AppData" / "Roaming")
+        return Path(appdata) / "Codex"
+    else:  # Linux and others
+        xdg_data = os.getenv("XDG_DATA_HOME") or (home / ".local" / "share")
+        return Path(xdg_data) / "codex"
+
+def find_session_path(codex_home: Path, thread_id: str) -> Path | None:
+    roots = [codex_home / "sessions", codex_home / "archived_sessions"]
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.jsonl"):
+            if thread_id in path.name:
+                return path
+    return None
+
+def read_last_messages(path: Path, count: int = 5) -> list[str]:
+    messages = []
+    if not path.exists():
+        return messages
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("type") == "message" and entry.get("role") == "user":
+                    content = entry.get("content", "")
+                    if isinstance(content, str):
+                        messages.append(content)
+    except OSError:
+        pass
+    return messages[-count:]
+
 def first_user_message(path: Path) -> str:
     if not path.exists():
         return ""
@@ -563,7 +612,44 @@ def main(argv: Optional[List[str]] = None) -> int:
                 thread_id = sessions[args.index - 1].thread_id
             if not thread_id:
                 raise CodexBridgeError("请提供 thread_id，或使用 --index 指定列表序号")
-            output = {"ok": True, "thread": client.get_session(thread_id)}
+            
+            session_data = client.get_session(thread_id)
+            
+            # 尝试提取关键信息进行展示
+            if isinstance(session_data, dict):
+                title = session_data.get("title", "Untitled Session")
+                messages = session_data.get("messages", [])
+                last_msg = messages[-1].get("content", "No content") if messages else "Empty session"
+                output = {
+                    "ok": True, 
+                    "message": f"会话标题: {title}\n\n最后一条消息:\n{last_msg}"
+                }
+            else:
+                output = {"ok": True, "thread": session_data}
+            title = session_data.get("title") or session_data.get("t") or "Untitled"
+            
+            # 尝试从本地 JSONL 提取最后几条消息
+            codex_home = get_codex_home(client.codex_binary)
+            path = find_session_path(codex_home, thread_id)
+            history_preview = []
+            if path:
+                messages = read_last_messages(path, count=5)
+                history_preview = [clean_text(m)[:100] for m in messages]
+            else:
+                # 如果本地找不到文件，尝试通过 API 获取原始数据
+                try:
+                    raw_data = client._send_request("thread/read", {"threadId": thread_id})
+                    turns = raw_data.get("turns", [])
+                    for turn in turns[-5:]:
+                        role = turn.get("role", "unknown")
+                        content = turn.get("content", "")
+                        if isinstance(content, list):
+                            content = " ".join([c.get("text", "") for c in content if c.get("type") == "text"])
+                        history_preview.append(f"{role}: {content[:100]}...")
+                except Exception as e:
+                    history_preview.append(f"[API读取失败: {e}]")
+            
+            output["message"] = f"会话标题: {title}\n\n历史摘要:\n" + "\n".join([f"- {m}" for m in history_preview])
         elif command == "send":
             output = {"ok": True, "result": client.send_message(args.thread_id, args.message)}
         else:
