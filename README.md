@@ -1,56 +1,73 @@
-# AgentCodex (Remote Control Bridge for Lobster Assistant)
+# AgentCodex
 
-**AgentCodex** 是 **Agent龙虾助手** 的远程控制中枢。它通过 Python 直连 Codex App 的底层通信协议，让你能够突破物理设备的限制，随时随地通过龙虾助手远程操控公司电脑上的 Codex。
+AgentCodex is an agent-oriented bridge for local Codex App sessions.
 
-## 🎯 核心价值：打破空间限制
+It is designed for Lobster Agent and similar agent systems. It provides stable session discovery, context reading, and session operation capabilities so an Agent can understand the current Codex state and, after explicit confirmation, send follow-up instructions to the selected Codex session.
 
-想象一下：你的高性能开发机在公司，但你现在在家里或路上。通过 **AgentCodex** + **龙虾助手**，你可以：
-1.  **远程唤醒**：在任何设备上与龙虾助手对话，即可连接公司的 Codex 实例。
-2.  **无缝接力**：在家继续处理公司电脑上的复杂代码任务，无需打开远程桌面。
-3.  **状态同步**：实时获取公司电脑的 Git 进度、文件状态和开发上下文。
+## Core Responsibilities
 
----
+- Expose local Codex session capabilities to Agent systems through a lightweight bridge.
+- Normalize session metadata into Agent-friendly fields: index, title, project, branch, and last updated time.
+- Read session details so Agents can recover task context before acting.
+- Send follow-up instructions to a confirmed Codex session.
+- Provide layered Agent skills for lifecycle management, session discovery, session reading, and session operation.
 
-## 🚀 功能特性
+## Scope
 
-*   **JSON-RPC 深度桥接**：绕过官方 CLI 的限制，直接与 `codex app-server` 进行底层通信。
-*   **会话全量提取**：不仅获取列表，还能深入 `.jsonl` 日志还原真实的 User/Assistant 对话流。
-*   **轻量级纯 Python**：零重型依赖，作为后台服务稳定运行，随时等待龙虾助手的远程指令。
+AgentCodex is a control-plane bridge for Codex. It does not replace Codex, store business code, implement remote desktop behavior, or define project-specific development workflows.
 
-## 📦 安装与使用
+Concrete operation rules are intentionally kept in skills instead of this README. Agents should load the relevant skill and follow it as the source of truth for commands, matching rules, and safety policy.
 
-### 1. 环境要求
-确保目标机器（如公司电脑）已安装并启动了 Codex：
+## Agent Entry
+
+`agents/skills/`
+
+Agents should choose a skill by task intent:
+
+- `codex_bridge_lifecycle`: Start, check, restart, and stop the AgentCodex bridge.
+- `codex_session_reader`: Read Codex session lists and session details.
+- `codex_session_operator`: Select a target session, safely send follow-up instructions, and format Codex relay messages.
+
+## Start Bridge
+
+Enter the AgentCodex project directory:
+
 ```bash
-brew install codex
-codex app-server # 确保后端服务正在运行
+cd /xxx/AgentCodex
 ```
 
-### 2. 运行桥接服务
+Start and check the Codex bridge:
+
 ```bash
-cd AgentCodex
-python3 codex_client.py
+python3 codex_client.py --json start
 ```
 
-## 🛠️ Agent Skills (for AI Agents)
+`ok: true` means the bridge is available. Session reading and operation flows are guided by the skills in `agents/skills/`.
 
-如果你是 AI Agent 开发者，可以将本项目中的 `agents/skills` 目录集成到你的 Agent 系统中，赋予其远程控制能力。
+## Human-Readable Output
 
-*   **Skill: `remote_codex_controller`**
-    *   **描述**: 允许 Agent 跨越网络边界，向指定的 Codex 实例发送指令。
-    *   **用途**: 实现“手机端发起需求 -> 公司电脑执行代码 -> 结果回传手机端”的闭环。
+English is the default language for human-readable CLI output:
 
-## 📂 项目结构
+```bash
+python3 codex_client.py list --limit 10
+```
 
-*   `codex_client.py`: 核心客户端逻辑，包含 JSON-RPC 握手与会话解析。
-*   `agents/skills/`: 针对 AI Agent 的远程控制指引文件。
+Default table header:
 
-## 📝 协议说明
+```text
+Index | Title | Project | Branch | Updated
+```
 
-本项目通过以下 JSON-RPC 方法与 `codex app-server` 交互：
-*   `initialize`: 初始化握手。
-*   `thread/list`: 获取会话列表。
-*   `thread/read`: 读取会话详情。
+Use Chinese output explicitly when needed:
 
----
-*Empowering your Agent to control Codex from anywhere.*
+```bash
+python3 codex_client.py --lang zh list --limit 10
+```
+
+Agent-facing JSON fields are always stable English keys.
+
+## Repository Layout
+
+- `codex_client.py`: Python Codex JSON-RPC client and Agent-friendly CLI.
+- `codex-client.js`: Lightweight Node.js client.
+- `agents/skills/`: Layered skill instructions for Lobster Agent.

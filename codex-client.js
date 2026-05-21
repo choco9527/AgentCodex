@@ -11,7 +11,12 @@ class CodexClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      console.log(`[CodexBridge] 正在连接本地 Codex app-server (ws://127.0.0.1:${this.port})...`);
+      if (this.client && !this.client.destroyed) {
+        resolve();
+        return;
+      }
+
+      console.log(`[CodexBridge] 正在连接本地 Codex app-server (tcp://127.0.0.1:${this.port})...`);
       
       this.client = net.createConnection(this.port, '127.0.0.1', () => {
         console.log('[CodexBridge] ✅ TCP 连接成功！');
@@ -51,7 +56,8 @@ class CodexClient {
 
   _handleMessage(message) {
     if (message.id && this.pendingRequests.has(message.id)) {
-      const { resolve, reject } = this.pendingRequests.get(message.id);
+      const { resolve, reject, timeout } = this.pendingRequests.get(message.id);
+      clearTimeout(timeout);
       this.pendingRequests.delete(message.id);
       if (message.error) {
         reject(new Error(message.error.message || JSON.stringify(message.error)));
@@ -63,6 +69,11 @@ class CodexClient {
 
   _sendRequest(method, params = {}) {
     return new Promise((resolve, reject) => {
+      if (!this.client || this.client.destroyed) {
+        reject(new Error('Codex app-server 未连接'));
+        return;
+      }
+
       const id = this.requestId++;
       const payload = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
       
@@ -83,12 +94,13 @@ class CodexClient {
   }
 
   async getSession(threadId) {
-    return await this._sendRequest('thread/read', { thread_id: threadId });
+    return await this._sendRequest('thread/read', { thread_id: threadId, threadId });
   }
 
   async sendMessage(threadId, text) {
     return await this._sendRequest('turn:start', {
       thread_id: threadId,
+      threadId,
       input: [{ role: 'user', content: [{ type: 'text', text }] }]
     });
   }
