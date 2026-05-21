@@ -18,6 +18,8 @@ Use this skill when Lobster Agent needs to prepare or recover the AgentCodex bri
 
 Run from the AgentCodex project root.
 
+AgentCodex starts the official Codex app-server with `--listen stdio://` by default. For custom deployments, set `CODEX_APP_SERVER_CMD` to the full app-server command.
+
 ### Start
 
 ```bash
@@ -54,7 +56,7 @@ Use `stop` only when the user asks to stop the bridge or when cleanup is explici
 
 - `timed out`: run `restart`, then retry the original command once.
 - `app-server 未连接`: run `check`, then retry if successful.
-- `找不到 Codex 可执行文件`: ask the user to set `CODEX_BINARY`.
+- `Codex binary not found`: ask the user to set `CODEX_BINARY` or `CODEX_APP_SERVER_CMD`.
 - `Operation not permitted`: the bridge may require permission to start Codex outside the current sandbox.
 
 ## Output Rule

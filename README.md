@@ -68,6 +68,7 @@ Agent-facing JSON fields are always stable English keys.
 
 ## Repository Layout
 
-- `codex_client.py`: Python Codex JSON-RPC client and Agent-friendly CLI.
+- `codex_bridge/`: Python package containing the Codex JSON-RPC client, session normalization, and CLI.
+- `codex_client.py`: Backward-compatible CLI entrypoint that delegates to `codex_bridge`.
 - `codex-client.js`: Lightweight Node.js client.
 - `agents/skills/`: Layered skill instructions for Lobster Agent.
